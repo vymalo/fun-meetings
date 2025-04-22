@@ -1,0 +1,2 @@
+FROM mirotalk/sfu:latest
+

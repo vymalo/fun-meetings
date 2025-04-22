@@ -1,38 +1,307 @@
 services:
+  rtmp:
+    image: datarhei/restreamer
+    ports:
+      - "1935:1935"
+    environment:
+      RS_TOKEN: "faFPh7dDTOoHi+CGyGtq9TUCdhmhfGVkpP6/RkkJy3rXVicCAvU/594Az4eAb2ij"  
+    networks:
+      - default
+  
   mirotalk:
-    image: mirotalk/p2p:latest
-    hostname: mirotalk
+    image: mirotalk/sfu:latest
     ports:
-      - ${PORT}:${PORT}
-    env_file:
-      - .env
-#    volumes:
-#      - ./app/src/config.js:/src/app/src/config.js:ro
-#      - ./public/:/src/public/:ro
+      - "3010:3010"
+      - "40000-40100:40000-40100"
     restart: unless-stopped
     networks:
       - web
+      - default
+    expose:
+      - 3010
+    environment:
+      # ====================================================
+      # MiroTalk SFU - Environment Configuration
+      # ====================================================
 
-  caddy:
-    image: caddy:latest
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./conf:/etc/caddy
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - mirotalk
-    networks:
-      - web
+      # config.js - Main configuration with:
+      # - All default values and documentation
+      # - Complex logic and validations
+      # - Safe to commit to version control
+      #
+      # .env - Environment overrides with:
+      # - Secrets and sensitive data (NEVER commit)
+      # - Environment-specific settings
+      # - Simple key=value format
+      #
+      # Why this works best:
+      # 1. SECURITY: Secrets stay out of codebase
+      # 2. FLEXIBILITY: Change settings without redeploy
+      # 3. SAFETY: Built-in defaults prevent crashes
+      # 4. DOCS: config.js explains all options
+      #
+      # Best practice:
+      # - Keep DEFAULT values in config.js
+      # - Keep SECRETS/ENV-SPECIFIC in .env
+      # - Add .env to .gitignore
+      # ====================================================
 
-volumes:
-  caddy_data:
-  caddy_config:
+      # ----------------------------------------------------
+      # 1. Core System Configuration
+      # ----------------------------------------------------
+
+      NODE_ENV: production                              # Runtime environment: development|production
+
+      SFU_SERVER: true                                  # Enable/disable WebRTC server (true|false)
+      SFU_ANNOUNCED_IP: 192.168.1.84                                 # Set your public IP address or domain for WebRTC announcements
+      SFU_LISTEN_IP: 0.0.0.0                             # Bind to all interfaces
+      SFU_MIN_PORT: 40000                                # Minimum WebRTC port range
+      SFU_MAX_PORT: 40100                                # Maximum WebRTC port range
+      SFU_NUM_WORKERS: 4                                  # Number of worker processes (defaults to CPU count)
+
+      # ----------------------------------------------------
+      # 2. Server Configuration
+      # ----------------------------------------------------
+
+      SERVER_HOST_URL: https://192.168.1.84:3010                                  # Public server URL (e.g., https://yourdomain.com)
+      SERVER_LISTEN_IP: 0.0.0.0                          # Server bind IP
+      SERVER_LISTEN_PORT: 3010                           # Port to listen on
+      TRUST_PROXY: true                                 # Trust proxy headers (true in production behind reverse proxy)
+      SERVER_SSL_CERT: ../ssl/cert.pem                   # Path to SSL certificate
+      SERVER_SSL_KEY: ../ssl/key.pem                     # Path to SSL private key
+      CORS_ORIGIN: "*"                                     # Allowed CORS origins (comma-separated)
+
+      # ----------------------------------------------------
+      # 3. Media Handling
+      # ----------------------------------------------------
+
+      # Recording
+      RECORDING_ENABLED: false                           # Enable recording functionality (true|false)
+      RECORDING_ENDPOINT:                                # Recording service endpoint es http://localhost:8080
+
+      # Rtmp streaming
+      RTMP_ENABLED: true                                 # Enable RTMP streaming (true|false)
+      RTMP_FROM_FILE: true                               # Enable local file streaming
+      RTMP_FROM_URL: true                                # Enable URL streaming
+      RTMP_FROM_STREAM: true                             # Enable live stream (camera, microphone, screen, window)
+      RTMP_MAX_STREAMS: 2                                # Max simultaneous RTMP streams
+      RTMP_USE_NODE_MEDIA_SERVER: true                      # Use Node Media Server mirotalk-nms Docker image 
+      RTMP_SERVER: rtmp://rtmp:1935                 # RTMP server URL
+      RTMP_APP_NAME: live                                # RTMP application name
+      RTMP_STREAM_KEY: "faFPh7dDTOoHi+CGyGtq9TUCdhmhfGVkpP6/RkkJy3rXVicCAvU/594Az4eAb2ij"                                  # RTMP stream key (optional)
+      RTMP_SECRET: "QtqQjSTiafX0h14rOWYQgqmmGIJE+UUs0e/9ywUEAGYxyNYOASJMbUADgNpmFokn"       # RTMP API secret (Must match node-media-server config.js)
+      RTMP_API_SECRET: "993aKnXeSCWAES8vsRvXG3bbkTvJhoOj/gdE1VP9sQm+0y1el8WR41DCgTWdwRLn"       # RTMP internal secret
+      RTMP_EXPIRATION_HOURS: 4                           # RTMP URL validity duration (hours)
+      RTMP_FFMPEG_PATH:                                  # RTMP Custom path to FFmpeg binary (auto-detected if empty)
+
+      # ----------------------------------------------------
+      # 4. Security & Authentication
+      # ----------------------------------------------------
+
+      # Middleware
+      IP_WHITELIST_ENABLED: false                        # Restrict access by IP (true|false)
+      IP_WHITELIST_ALLOWED: 127.0.0.1,::1                # Allowed IPs (comma-separated)
+
+      # Token
+      JWT_SECRET: "GZyk1R4hVQ9p7o3Y3ALjfmPV2Wa1ciSd9zPRdD3PGbO7v03iUwkVDEq7Bt4ybVV3"       # Secret for JWT tokens
+      JWT_EXPIRATION: 4h                                 # JWT token expiration (e.g., 1h, 7d)
+
+      # OIDC 
+      OIDC_ENABLED: true                                # Enable OpenID Connect (true|false)
+      OIDC_ALLOW_ROOMS_CREATION_FOR_AUTH_USERS: true    # Allow all authenticated users via OIDC to create their own rooms
+      OIDC_ISSUER: https://login.dev.wazuh.adorsys.team/realms/test-adorsys            # OIDC provider URL
+      OIDC_BASE_URL: https://192.168.1.84:3010                                    # OIDC base URL es https://yourdomain.com
+      OIDC_CLIENT_ID: adorsys-meet                           # OIDC client ID
+      OIDC_CLIENT_SECRET: "mMcPIXuVwlFmD0WayducDL1rGkAEr3z0"                   # OIDC client secret
+      OIDC_SECRET: "ZIv8NSYMslMJimDqeclqYd/g0XTBUT+m6ne/aAvdclcqT2utijFI2WqgjI9yDlWY"               # OIDC secret
+
+      # Host protection
+      HOST_PROTECTED: false                              # Enable host protection (true|false)
+      HOST_USER_AUTH: false                              # Enable user authentication (true|false)
+
+      # Endpoints
+      HOST_USERS_FROM_DB: false                          # Use DB for user auth (true|false)
+      USERS_API_SECRET: "L5UOOfvW+gbxuOH1jomqCdP4X478Sii9sIHxDLy2xzTlAsPAPYCpylDMqhAzmaox"       # Users API secret key
+      USERS_API_ENDPOINT: http://localhost:9000/api/v1/user/isAuth # User auth endpoint
+      USERS_ROOM_ALLOWED_ENDPOINT: http://localhost:9000/api/v1/user/isRoomAllowed # Room permission endpoint
+      USERS_ROOMS_ALLOWED_ENDPOINT: http://localhost:9000/api/v1/user/roomsAllowed # Allowed rooms endpoint
+      ROOM_EXISTS_ENDPOINT: http://localhost:9000/api/v1/room/exists # Room exists endpoint
+
+      # Users
+      DEFAULT_USERNAME: username                         # Default admin username
+      DEFAULT_PASSWORD: password                         # Default admin password
+      DEFAULT_DISPLAY_NAME: username display name        # Default display name
+      DEFAULT_ALLOWED_ROOMS: "*"                           # Default allowed rooms all or room1,room2... (comma-separated)
+
+      # Presenters
+      PRESENTERS: Stephane Segning,stephane.segning-lambou@adorsys.com, # Presenter usernames (comma-separated)
+      PRESENTER_JOIN_FIRST: true                         # First joiner becomes presenter (true|false)
+
+      # ----------------------------------------------------
+      # 5. API Configuration
+      # ----------------------------------------------------
+
+      API_SECRET: "JmOPiuaCP+sKnMPJIcJvb895KQTkuY55mfTM/yhmOOX8GJydCHErCEwuEkI71mYE"      # Secret for API authentication
+      API_ALLOW_STATS: false                              # Enable stats API (true|false)
+
+      # ----------------------------------------------------
+      # 6. Third-Party Integrations
+      # ----------------------------------------------------
+
+      # ----------------------------------------------------
+      # 7. UI Customization
+      # ----------------------------------------------------
+
+      # App
+      UI_LANGUAGE: en                                    # Interface language (en, es, fr, etc.)
+      APP_NAME: Adorsys Meet                             # Application name
+      APP_TITLE: Adorsys Meet                                        # Custom HTML title (leave empty for default)
+      APP_DESCRIPTION: Enjoy doing meetings at Adorsys                                  # Application description
+      JOIN_DESCRIPTION: You sure you wanna join?                                 # Join screen description
+      JOIN_BUTTON_LABEL: Ok fine                       # Join button text
+      JOIN_LAST_LABEL: "You where there:"                 # Recent room label text
+
+      # Site
+      SITE_TITLE: Adorsys Meet                                       # Website title
+      SITE_ICON_PATH: ../images/logo.svg                 # Favicon path
+      APPLE_TOUCH_ICON_PATH: ../images/logo.svg          # Apple touch icon path
+      NEW_ROOM_TITLE:                                    # New room title
+      NEW_ROOM_DESC:                                     # New room description
+
+      # Meta
+      META_DESCRIPTION:                                  # HTML meta description
+      META_KEYWORDS:                                     # HTML meta keywords
+
+      # OG
+      OG_TYPE: app-webrtc                                # OpenGraph type
+      OG_SITE_NAME: Adorsys Meet                         # OG site name
+      OG_TITLE:                                          # OG title
+      OG_DESCRIPTION:                                    # OG description
+      OG_IMAGE_URL: https://sfu.mirotalk.com/images/mirotalksfu.png # OG image
+      OG_URL: https://sfu.mirotalk.com                   # OG URL
+
+      # HTML
+      SHOW_FEATURES: true                                # Show features section (true|false)
+      SHOW_TEAMS: true                                   # Show teams section (true|false)
+      SHOW_TRY_EASIER: true                              # Show "try easier" section (true|false)
+      SHOW_POWERED_BY: false                              # Show powered by (true|false)
+      SHOW_SPONSORS: false                                # Show sponsors (true|false)
+      SHOW_ADVERTISERS: false                             # Show advertisers (true|false)
+      SHOW_FOOTER: true                                  # Show footer (true|false)
+
+      # About
+      ABOUT_IMAGE_URL: ../images/mirotalk-logo.gif       # About section image
+      SUPPORT_URL: https://github.com/adorsys-gis # Support link URL
+      SUPPORT_TEXT: Support                              # Support button text
+      AUTHOR_LABEL: "maker:"                               # Author label text
+      AUTHOR_NAME: Adorsys Meet                        # Author name
+      LINKEDIN_URL: https://www.linkedin.com/in/miroslav-pejic-976a07101/ # LinkedIn profile
+      CONTACT_EMAIL: gis-udm@adorsys.com         # Contact email
+      EMAIL_SUBJECT: Adorsys Meet info                   # Email subject
+      COPYRIGHT_TEXT: Adorsys Meet, all rights reserved  # Copyright text
+
+      # ----------------------------------------------------
+      # 8. UI Button Configuration
+      # ----------------------------------------------------
+
+      # Main Control Buttons
+      SHOW_SHARE_QR: true                                # Show share room QR popup (true|false)
+      SHOW_SHARE_BUTTON: true                            # Show share button (true|false)
+      SHOW_HIDE_ME: true                                 # Show hide me button (true|false)
+      SHOW_AUDIO_BUTTON: true                            # Show audio button (true|false)
+      SHOW_VIDEO_BUTTON: true                            # Show video button (true|false)
+      SHOW_SCREEN_BUTTON: true                           # Show screen share button (true|false)
+      SHOW_SWAP_CAMERA: true                             # Show camera swap button (true|false)
+      SHOW_CHAT_BUTTON: true                             # Show chat button (true|false)
+      SHOW_POLL_BUTTON: true                             # Show poll button (true|false)
+      SHOW_EDITOR_BUTTON: true                           # Show editor button (true|false)
+      SHOW_RAISE_HAND: true                              # Show raise hand button (true|false)
+      SHOW_TRANSCRIPTION: true                           # Show transcription button (true|false)
+      SHOW_WHITEBOARD: true                              # Show whiteboard button (true|false)
+      SHOW_DOCUMENT_PIP: true                            # Show document PiP button (true|false)
+      SHOW_SNAPSHOT: true                                # Show snapshot button (true|false)
+      SHOW_EMOJI: true                                   # Show emoji button (true|false)
+      SHOW_SETTINGS: true                                # Show settings button (true|false)
+      SHOW_ABOUT: true                                   # Show about button (true|false)
+      SHOW_EXIT_BUTTON: true                             # Show exit button (true|false)
+
+      # Settings Panel
+      ENABLE_FILE_SHARING: true                          # Enable file sharing (true|false)
+      SHOW_LOCK_ROOM: true                               # Show lock room button (true|false)
+      SHOW_UNLOCK_ROOM: true                             # Show unlock room button (true|false)
+      SHOW_BROADCASTING: true                            # Show broadcasting button (true|false)
+      SHOW_LOBBY: true                                   # Show lobby button (true|false)
+      SHOW_EMAIL_INVITE: true                            # Show email invitation button (true|false)
+      SHOW_MIC_OPTIONS: true                             # Show mic options button (true|false)
+      SHOW_RTMP_TAB: true                                # Show RTMP tab (true|false)
+      SHOW_MODERATOR_TAB: true                           # Show moderator tab (true|false)
+      SHOW_RECORDING_TAB: true                           # Show recording tab (true|false)
+      HOST_ONLY_RECORDING: true                          # Only host can record (true|false)
+      ENABLE_PUSH_TO_TALK: true                          # Enable push-to-talk (true|false)
+      SHOW_KEYBOARD_SHORTCUTS: true                      # Show keyboard shortcuts (true|false)
+      SHOW_VIRTUAL_BACKGROUND: true                      # Show virtual background (true|false)
+
+      # Video Controls
+      ENABLE_PIP: true                                   # Enable picture-in-picture (true|false)
+      SHOW_MIRROR_BUTTON: true                           # Show mirror button (true|false)
+      SHOW_FULLSCREEN: true                              # Show fullscreen button (true|false)
+      SHOW_SNAPSHOT_BUTTON: true                         # Show snapshot button (true|false)
+      SHOW_MUTE_AUDIO: true                              # Show mute audio button (true|false)
+      SHOW_PRIVACY_TOGGLE: true                          # Show privacy toggle (true|false)
+      SHOW_VOLUME_CONTROL: true                          # Show volume control (true|false)
+      SHOW_FOCUS_BUTTON: true                            # Show focus button (true|false)
+      SHOW_SEND_MESSAGE: true                            # Show send message button (true|false)
+      SHOW_SEND_FILE: true                               # Show send file button (true|false)
+      SHOW_SEND_VIDEO: true                              # Show send video button (true|false)
+      SHOW_MUTE_VIDEO: true                              # Show mute video button (true|false)
+      SHOW_GEO_LOCATION: true                            # Show geoLocation button (true|false)
+      SHOW_BAN_BUTTON: true                              # Show ban button (true|false)
+      SHOW_EJECT_BUTTON: true                            # Show eject button (true|false)
+
+      # Chat Controls
+      SHOW_CHAT_PIN: true                                # Show chat pin button (true|false)
+      SHOW_CHAT_MAXIMIZE: true                           # Show chat maximize button (true|false)
+      SHOW_CHAT_SAVE: true                               # Show chat save button (true|false)
+      SHOW_CHAT_EMOJI: true                              # Show chat emoji button (true|false)
+      SHOW_CHAT_MARKDOWN: true                           # Show chat markdown button (true|false)
+      SHOW_CHAT_SPEECH: true                             # Show chat speech button (true|false)
+      ENABLE_CHAT_GPT: true                              # Enable ChatGPT in chat (true|false)
+
+      # Poll Controls
+      SHOW_POLL_PIN: true                                # Show poll pin button (true|false)
+      SHOW_POLL_MAXIMIZE: true                           # Show poll maximize button (true|false)
+      SHOW_POLL_SAVE: true                               # Show poll save button (true|false)
+
+      # Participants Controls
+      SHOW_SAVE_INFO: true                               # Show save info button (true|false)
+      SHOW_SEND_FILE_ALL: true                           # Show send file to all button (true|false)
+      SHOW_EJECT_ALL: true                               # Show eject all button (true|false)
+
+      # Whiteboard Controls
+      SHOW_WB_LOCK: true                                 # Show whiteboard lock button (true|false)
+
+      # ----------------------------------------------------
+      # 9. Feature Flags
+      # ----------------------------------------------------
+
+      SURVEY_ENABLED: false                              # Enable post-call survey (true|false)
+      SURVEY_URL:                                        # Survey URL
+
+      # Redirect
+      REDIRECT_ENABLED: false                            # Enable post-call redirect (true|false)
+      REDIRECT_URL:                                      # Redirect URL
+
+      # Stats
+      STATS_ENABLED: false                                # Enable usage statistics (true|false)
+
+      # ----------------------------------------------------
+      # 10. Mediasoup Configuration
+      # ----------------------------------------------------
+
+      MEDIASOUP_LOG_LEVEL: error                         # Mediasoup log level (debug, warn, error)
+
 
 networks:
+  default:
   web:
     driver: bridge
