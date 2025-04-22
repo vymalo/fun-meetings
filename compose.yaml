@@ -1,0 +1,11 @@
+services:
+  mirotalk:
+    image: mirotalk/p2p:latest
+    hostname: mirotalk
+    env_file:
+      - .env
+#    volumes:
+#      - ./app/src/config.js:/src/app/src/config.js:ro
+#      - ./public/:/src/public/:ro
+    restart: unless-stopped
+        
