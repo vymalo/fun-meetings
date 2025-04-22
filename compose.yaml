@@ -2,10 +2,37 @@ services:
   mirotalk:
     image: mirotalk/p2p:latest
     hostname: mirotalk
+    ports:
+      - ${PORT}:${PORT}
     env_file:
       - .env
 #    volumes:
 #      - ./app/src/config.js:/src/app/src/config.js:ro
 #      - ./public/:/src/public/:ro
     restart: unless-stopped
-        
+    networks:
+      - web
+
+  caddy:
+    image: caddy:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./conf:/etc/caddy
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - mirotalk
+    networks:
+      - web
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  web:
+    driver: bridge

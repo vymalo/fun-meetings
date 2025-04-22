@@ -1,0 +1,4 @@
+# Reverse proxy to your service
+:3000 {
+    reverse_proxy localhost:3000
+}

@@ -1,0 +1,18 @@
+# Expose a Dockerized App over HTTPS with Nginx
+
+Below is a step‑by‑step guide to put your existing app (packaged in a Docker image) behind an Nginx reverse proxy serving TLS.
+
+---
+
+## 1. Generate a TLS Certificate
+
+For local/dev you can create a self‑signed cert. In a folder called `ssl/` run:
+
+```bash
+mkdir -p ssl && cd ssl
+
+# Generate a 1‑year self‑signed cert for "localhost"
+openssl req -x509 -nodes -days 365 \
+  -newkey rsa:2048 \
+  -keyout server.key \
+  -out server.crt \
